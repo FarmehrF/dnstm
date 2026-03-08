@@ -46,6 +46,7 @@ const (
 const (
 	TransportSlipstream = config.TransportSlipstream
 	TransportDNSTT      = config.TransportDNSTT
+	TransportNoizDNS    = config.TransportNoizDNS
 )
 
 // CertConfig holds certificate paths and fingerprint.

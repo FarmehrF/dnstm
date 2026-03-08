@@ -44,6 +44,7 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		Options: []tui.MenuOption{
 			{Label: "DNSTT", Value: string(config.TransportDNSTT)},
 			{Label: "Slipstream", Value: string(config.TransportSlipstream)},
+			{Label: "NoizDNS", Value: string(config.TransportNoizDNS)},
 		},
 	})
 	if err != nil {
@@ -130,9 +131,9 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 		break
 	}
 
-	// Get MTU for DNSTT
+	// Get MTU for DNSTT/NoizDNS
 	mtu := 1232
-	if config.TransportType(transportType) == config.TransportDNSTT {
+	if config.TransportType(transportType) == config.TransportDNSTT || config.TransportType(transportType) == config.TransportNoizDNS {
 		for {
 			mtuStr, confirmed, mtuErr := tui.RunInput(tui.InputConfig{
 				Title:       "MTU",
@@ -170,6 +171,9 @@ func addTunnelInteractive(ctx *actions.Context, cfg *config.Config) error {
 	if tunnelCfg.Transport == config.TransportDNSTT {
 		tunnelCfg.DNSTT = &config.DNSTTConfig{MTU: mtu}
 	}
+	if tunnelCfg.Transport == config.TransportNoizDNS {
+		tunnelCfg.NoizDNS = &config.DNSTTConfig{MTU: mtu}
+	}
 
 	// Allocate port
 	port := cfg.AllocateNextPort()
@@ -193,8 +197,8 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 	transportType := config.TransportType(transportStr)
 
 	// Validate transport type
-	if transportType != config.TransportSlipstream && transportType != config.TransportDNSTT {
-		return fmt.Errorf("invalid transport type: %s (must be slipstream or dnstt)", transportType)
+	if transportType != config.TransportSlipstream && transportType != config.TransportDNSTT && transportType != config.TransportNoizDNS {
+		return fmt.Errorf("invalid transport type: %s (must be slipstream, dnstt, or noizdns)", transportType)
 	}
 
 	// Validate backend exists and is compatible
@@ -204,10 +208,10 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 	}
 
 	// Check transport-backend compatibility
-	if transportType == config.TransportDNSTT && backend.Type == config.BackendShadowsocks {
+	if (transportType == config.TransportDNSTT || transportType == config.TransportNoizDNS) && backend.Type == config.BackendShadowsocks {
 		return actions.NewActionError(
 			"incompatible transport and backend",
-			"DNSTT transport does not support Shadowsocks backend",
+			fmt.Sprintf("%s transport does not support Shadowsocks backend", config.GetTransportTypeDisplayName(transportType)),
 		)
 	}
 
@@ -240,6 +244,12 @@ func addTunnelNonInteractive(ctx *actions.Context, cfg *config.Config) error {
 			mtu = 1232
 		}
 		tunnelCfg.DNSTT = &config.DNSTTConfig{MTU: mtu}
+	}
+	if transportType == config.TransportNoizDNS {
+		if mtu == 0 {
+			mtu = 1232
+		}
+		tunnelCfg.NoizDNS = &config.DNSTTConfig{MTU: mtu}
 	}
 
 	// Allocate port
@@ -366,6 +376,14 @@ func createTunnel(ctx *actions.Context, tunnelCfg *config.TunnelConfig, cfg *con
 		publicKey = keyInfo.PublicKey
 		tunnelCfg.DNSTT.PrivateKey = keyInfo.PrivateKeyPath
 		ctx.Output.Status("Curve25519 keys ready")
+	} else if tunnelCfg.Transport == config.TransportNoizDNS {
+		keyInfo, err := keys.GetOrCreateInDir(tunnelDir)
+		if err != nil {
+			return fmt.Errorf("failed to generate keys: %w", err)
+		}
+		publicKey = keyInfo.PublicKey
+		tunnelCfg.NoizDNS.PrivateKey = keyInfo.PrivateKeyPath
+		ctx.Output.Status("Curve25519 keys ready")
 	}
 
 	// Step 4: Create systemd service
@@ -467,9 +485,9 @@ func buildBackendOptions(cfg *config.Config, transportType config.TransportType)
 	var options []tui.MenuOption
 
 	for _, b := range cfg.Backends {
-		// Check compatibility
-		if transportType == config.TransportDNSTT && b.Type == config.BackendShadowsocks {
-			continue // DNSTT doesn't support shadowsocks
+		// Check compatibility: DNSTT and NoizDNS don't support shadowsocks
+		if (transportType == config.TransportDNSTT || transportType == config.TransportNoizDNS) && b.Type == config.BackendShadowsocks {
+			continue
 		}
 
 		typeName := config.GetBackendTypeDisplayName(b.Type)

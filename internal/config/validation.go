@@ -108,7 +108,7 @@ func (c *Config) validateTunnels() error {
 			return fmt.Errorf("tunnel '%s': transport is required", t.Tag)
 		}
 
-		if t.Transport != TransportSlipstream && t.Transport != TransportDNSTT {
+		if t.Transport != TransportSlipstream && t.Transport != TransportDNSTT && t.Transport != TransportNoizDNS {
 			return fmt.Errorf("tunnel '%s': unknown transport %s", t.Tag, t.Transport)
 		}
 
@@ -154,6 +154,13 @@ func (c *Config) validateTunnels() error {
 				return fmt.Errorf("tunnel '%s': dnstt.mtu must be between 512 and 1400", t.Tag)
 			}
 		}
+
+		// Validate NoizDNS-specific config (same constraints as DNSTT)
+		if t.Transport == TransportNoizDNS && t.NoizDNS != nil {
+			if t.NoizDNS.MTU != 0 && (t.NoizDNS.MTU < 512 || t.NoizDNS.MTU > 1400) {
+				return fmt.Errorf("tunnel '%s': noizdns.mtu must be between 512 and 1400", t.Tag)
+			}
+		}
 	}
 
 	return nil
@@ -188,6 +195,10 @@ func validateTransportBackendCompatibility(transport TransportType, backend Back
 	// DNSTT doesn't support shadowsocks (no SIP003 plugin support)
 	if transport == TransportDNSTT && backend == BackendShadowsocks {
 		return fmt.Errorf("dnstt transport does not support shadowsocks backend (no SIP003 plugin support)")
+	}
+	// NoizDNS doesn't support shadowsocks (same server binary as DNSTT, no SIP003)
+	if transport == TransportNoizDNS && backend == BackendShadowsocks {
+		return fmt.Errorf("noizdns transport does not support shadowsocks backend (no SIP003 plugin support)")
 	}
 	return nil
 }

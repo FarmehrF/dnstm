@@ -59,6 +59,14 @@ func (c *Config) ApplyDefaults() {
 				t.DNSTT.MTU = 1232
 			}
 		}
+		if t.Transport == TransportNoizDNS {
+			if t.NoizDNS == nil {
+				t.NoizDNS = &DNSTTConfig{}
+			}
+			if t.NoizDNS.MTU == 0 {
+				t.NoizDNS.MTU = 1232
+			}
+		}
 	}
 
 	// Backend shadowsocks method default

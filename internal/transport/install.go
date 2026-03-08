@@ -17,7 +17,7 @@ func EnsureTransportBinariesInstalled(transport config.TransportType) error {
 	switch transport {
 	case config.TransportSlipstream:
 		return EnsureSlipstreamInstalled()
-	case config.TransportDNSTT:
+	case config.TransportDNSTT, config.TransportNoizDNS:
 		return EnsureDnsttInstalled()
 	default:
 		return nil

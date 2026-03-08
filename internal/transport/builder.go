@@ -133,6 +133,8 @@ func (b *Builder) BuildTunnelService(tunnel *config.TunnelConfig, backend *confi
 		return b.buildSlipstreamTunnel(tunnel, backend, targetAddr, opts, result)
 	case config.TransportDNSTT:
 		return b.buildDNSTTTunnel(tunnel, backend, targetAddr, opts, result)
+	case config.TransportNoizDNS:
+		return b.buildNoizDNSTunnel(tunnel, backend, targetAddr, opts, result)
 	default:
 		return nil, fmt.Errorf("unknown transport type: %s", tunnel.Transport)
 	}
@@ -236,6 +238,37 @@ func (b *Builder) buildDNSTTTunnel(tunnel *config.TunnelConfig, backend *config.
 	}
 
 	// Build dnstt-server command
+	args := []string{
+		"-udp", fmt.Sprintf("%s:%d", opts.BindHost, opts.BindPort),
+		"-privkey-file", privKeyPath,
+		"-mtu", mtu,
+		tunnel.Domain,
+		targetAddr,
+	}
+
+	result.ExecStart = fmt.Sprintf("%s %s", DNSTTBinaryPath(), strings.Join(args, " "))
+	return result, nil
+}
+
+// buildNoizDNSTunnel builds a NoizDNS-based tunnel service.
+// NoizDNS uses the same dnstt-server binary; the server auto-detects NoizDNS clients.
+func (b *Builder) buildNoizDNSTunnel(tunnel *config.TunnelConfig, backend *config.BackendConfig, targetAddr string, opts *BuildOptions, result *TunnelBuildResult) (*TunnelBuildResult, error) {
+	if backend.Type == config.BackendShadowsocks {
+		return nil, fmt.Errorf("NoizDNS transport does not support Shadowsocks backend")
+	}
+
+	if tunnel.NoizDNS == nil || tunnel.NoizDNS.PrivateKey == "" {
+		return nil, fmt.Errorf("noizdns private key path not set for tunnel %s", tunnel.Tag)
+	}
+
+	privKeyPath := tunnel.NoizDNS.PrivateKey
+	result.ReadPaths = append(result.ReadPaths, privKeyPath)
+
+	mtu := "1232"
+	if tunnel.NoizDNS.MTU > 0 {
+		mtu = fmt.Sprintf("%d", tunnel.NoizDNS.MTU)
+	}
+
 	args := []string{
 		"-udp", fmt.Sprintf("%s:%d", opts.BindHost, opts.BindPort),
 		"-privkey-file", privKeyPath,

@@ -339,6 +339,11 @@ func TransportOptions() []SelectOption {
 			Value:       string(config.TransportDNSTT),
 			Description: "Classic DNS tunnel (dnstt-server)",
 		},
+		{
+			Label:       "NoizDNS",
+			Value:       string(config.TransportNoizDNS),
+			Description: "NoizDNS tunnel (dnstt-server, auto-detected)",
+		},
 	}
 }
 
@@ -353,9 +358,9 @@ func BackendOptions(ctx *Context) []SelectOption {
 	var options []SelectOption
 
 	for _, b := range cfg.Backends {
-		// Check compatibility
-		if transport == config.TransportDNSTT && b.Type == config.BackendShadowsocks {
-			continue // DNSTT doesn't support shadowsocks
+		// Check compatibility: DNSTT and NoizDNS don't support shadowsocks
+		if (transport == config.TransportDNSTT || transport == config.TransportNoizDNS) && b.Type == config.BackendShadowsocks {
+			continue
 		}
 
 		typeName := config.GetBackendTypeDisplayName(b.Type)
@@ -365,7 +370,7 @@ func BackendOptions(ctx *Context) []SelectOption {
 		recommended := false
 		if transport == config.TransportSlipstream && b.Type == config.BackendShadowsocks {
 			recommended = true
-		} else if transport == config.TransportDNSTT && b.Type == config.BackendSOCKS {
+		} else if (transport == config.TransportDNSTT || transport == config.TransportNoizDNS) && b.Type == config.BackendSOCKS {
 			recommended = true
 		}
 
